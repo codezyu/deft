@@ -86,10 +86,15 @@ class DSMClient {
                bool signal = true, CoroContext *ctx = nullptr);
   void FaaReadSync(RdmaOpRegion &faab_ror, RdmaOpRegion &read_ror, uint64_t add,
                    CoroContext *ctx = nullptr);
-
+/*
+ * @author zyu 2024-12-11 10:55:31
+ * @description deprecated API
+*/
+/*
   void FaaBoundRead(RdmaOpRegion &faab_ror, RdmaOpRegion &read_ror,
                     uint64_t add, uint64_t boundary, bool signal = true,
                     CoroContext *ctx = nullptr);
+            
   void FaaBoundReadSync(RdmaOpRegion &faab_ror, RdmaOpRegion &read_ror,
                         uint64_t add, uint64_t boundary,
                         CoroContext *ctx = nullptr);
@@ -114,7 +119,7 @@ class DSMClient {
   void FaaBoundSync(GlobalAddress gaddr, int log_sz, uint64_t add_val,
                     uint64_t *rdma_buffer, uint64_t mask,
                     CoroContext *ctx = nullptr);
-
+*/
   // for on-chip device memory
   void ReadDm(char *buffer, GlobalAddress gaddr, size_t size,
               bool signal = true, CoroContext *ctx = nullptr);
@@ -131,20 +136,27 @@ class DSMClient {
              CoroContext *ctx = nullptr);
   bool CasDmSync(GlobalAddress gaddr, uint64_t equal, uint64_t val,
                  uint64_t *rdma_buffer, CoroContext *ctx = nullptr);
+  void FaaDm(GlobalAddress gaddr, uint64_t add_val, uint64_t *rdma_buffer,
+             bool signal = true, CoroContext *ctx = nullptr);
+  void FaaDmSync(GlobalAddress gaddr, uint64_t add_val, uint64_t *rdma_buffer,
+                 CoroContext *ctx = nullptr);
+/*
+ * @author zyu 2024-12-11 10:55:12
+ * @description deprecated API
+*/
+  // void CasDmMask(GlobalAddress gaddr, int log_sz, uint64_t equal, uint64_t val,
+  //                uint64_t *rdma_buffer, uint64_t mask = ~(0ull),
+  //                bool signal = true, CoroContext *ctx = nullptr);
+  // bool CasDmMaskSync(GlobalAddress gaddr, int log_sz, uint64_t equal,
+  //                    uint64_t val, uint64_t *rdma_buffer,
+  //                    uint64_t mask = ~(0ull), CoroContext *ctx = nullptr);
 
-  void CasDmMask(GlobalAddress gaddr, int log_sz, uint64_t equal, uint64_t val,
-                 uint64_t *rdma_buffer, uint64_t mask = ~(0ull),
-                 bool signal = true, CoroContext *ctx = nullptr);
-  bool CasDmMaskSync(GlobalAddress gaddr, int log_sz, uint64_t equal,
-                     uint64_t val, uint64_t *rdma_buffer,
-                     uint64_t mask = ~(0ull), CoroContext *ctx = nullptr);
-
-  void FaaDmBound(GlobalAddress gaddr, int log_sz, uint64_t add_val,
-                  uint64_t *rdma_buffer, uint64_t mask, bool signal = true,
-                  CoroContext *ctx = nullptr);
-  void FaaDmBoundSync(GlobalAddress gaddr, int log_sz, uint64_t add_val,
-                      uint64_t *rdma_buffer, uint64_t mask,
-                      CoroContext *ctx = nullptr);
+  // void FaaDmBound(GlobalAddress gaddr, int log_sz, uint64_t add_val,
+  //                 uint64_t *rdma_buffer, uint64_t mask, bool signal = true,
+  //                 CoroContext *ctx = nullptr);
+  // void FaaDmBoundSync(GlobalAddress gaddr, int log_sz, uint64_t add_val,
+  //                     uint64_t *rdma_buffer, uint64_t mask,
+  //                     CoroContext *ctx = nullptr);
 
   uint64_t PollRdmaCq(int count = 1);
   bool PollRdmaCqOnce(uint64_t &wr_id);

@@ -36,10 +36,25 @@ thread_local uint64_t Tree::coro_ops_cnt_finish;
 thread_local GlobalAddress path_stack[define::kMaxCoro]
                                      [define::kMaxLevelOfTree];
 
+/*
+ * @author zyu 2024-12-11 15:41:05
+ * @description use for bounadry
+*/
 constexpr uint64_t XS_LOCK_FAA_MASK = 0x8000800080008000ul;
 // high->low
 // X_CUR X_TIC S_CUR S_TIC
 // lock: increase TIC, unlock: increase CUR
+/*
+ * @author zyu 2024-12-11 14:18:36
+ * @description for saving space, 32bit for each lock, 64x2 bytes totally
+*/
+constexpr uint16_t LOCK_SIZE = 16;
+const     uint16_t LOCK_MASK = (1 << LOCK_SIZE) - 1;
+// constexpr uint64_t S_LOCK_OFFSET = 0;
+// constexpr uint64_t S_UNLOCK_OFFSET = 1;
+// constexpr uint64_t X_LOCK_OFFSET = 2;
+// constexpr uint64_t X_UNLOCK_OFFSET = 3;
+// constexpr uint64_t S_UNLOCK_X_LOCK_OFFSET = 2;
 
 constexpr uint64_t ADD_S_LOCK = 1;
 constexpr uint64_t ADD_S_UNLOCK = 1ul << 16;
@@ -267,14 +282,18 @@ inline void Tree::acquire_sx_lock(GlobalAddress lock_addr,
   }
   // Timer timer;
   // timer.begin();
+  /*
+   * @author zyu 2024-12-11 10:59:26
+   * @description update FAADmboundSync to FaaDmSync
+   * 
+  */
+  dsm_client_->FaaDmSync(lock_addr,add_val, lock_buffer,
+                               ctx);
 
-  dsm_client_->FaaDmBoundSync(lock_addr, 3, add_val, lock_buffer,
-                              XS_LOCK_FAA_MASK, ctx);
-
-  uint16_t s_tic = *lock_buffer & 0xffff;
-  uint16_t s_cnt = (*lock_buffer >> 16) & 0xffff;
-  uint16_t x_tic = (*lock_buffer >> 32) & 0xffff;
-  uint16_t x_cnt = (*lock_buffer >> 48) & 0xffff;
+  uint16_t s_tic = *lock_buffer & LOCK_MASK;
+  uint16_t s_cnt = (*lock_buffer >> LOCK_SIZE) & LOCK_MASK;
+  uint16_t x_tic = (*lock_buffer >> (LOCK_SIZE * 2)) & LOCK_MASK;
+  uint16_t x_cnt = (*lock_buffer >> (LOCK_SIZE * 3)) & LOCK_MASK;
 
   if (upgrade_from_s) {
     ++s_cnt;
@@ -311,12 +330,16 @@ inline void Tree::release_sx_lock(GlobalAddress lock_addr,
                                   uint64_t *lock_buffer, CoroContext *ctx,
                                   bool async, bool share_lock) {
   uint64_t add_val = share_lock ? ADD_S_UNLOCK : ADD_X_UNLOCK;
+  /*
+   * @author zyu 2024-12-11 10:59:59
+   * @description update FAADmBoundSync to FaaDmSync
+  */
   if (async) {
-    dsm_client_->FaaDmBound(lock_addr, 3, add_val, lock_buffer,
-                            XS_LOCK_FAA_MASK, false);
+    dsm_client_->FaaDm(lock_addr, add_val, lock_buffer,
+                            false);
   } else {
-    dsm_client_->FaaDmBoundSync(lock_addr, 3, add_val, lock_buffer,
-                                XS_LOCK_FAA_MASK, ctx);
+    dsm_client_->FaaDmSync(lock_addr, add_val, lock_buffer,
+                              ctx);
   }
 }
 
@@ -333,14 +356,7 @@ inline void Tree::acquire_lock(GlobalAddress lock_addr, uint64_t *lock_buffer,
 inline void Tree::release_lock(GlobalAddress lock_addr, uint64_t *lock_buffer,
                                CoroContext *ctx, bool async, bool share_lock) {
 #ifdef USE_SX_LOCK
-  uint64_t add_val = share_lock ? ADD_S_UNLOCK : ADD_X_UNLOCK;
-  if (async) {
-    dsm_client_->FaaDmBound(lock_addr, 3, add_val, lock_buffer,
-                            XS_LOCK_FAA_MASK, false);
-  } else {
-    dsm_client_->FaaDmBoundSync(lock_addr, 3, add_val, lock_buffer,
-                                XS_LOCK_FAA_MASK, ctx);
-  }
+  release_sx_lock(lock_addr, lock_buffer, ctx, async, share_lock);
 #else
 
 #ifdef USE_LOCAL_LOCK
@@ -415,7 +431,7 @@ void Tree::write_and_unlock(char *write_buffer, GlobalAddress write_addr,
   auto t = timer.end();
   stat_helper.add(dsm_client_->get_my_thread_id(), lat_write_page, t);
 }
-
+// log_case_size deprecated
 void Tree::cas_and_unlock(GlobalAddress cas_addr, int log_cas_size,
                           uint64_t *cas_buffer, uint64_t equal, uint64_t swap,
                           uint64_t mask, GlobalAddress lock_addr,
@@ -425,8 +441,7 @@ void Tree::cas_and_unlock(GlobalAddress cas_addr, int log_cas_size,
   timer.begin();
 
 #ifdef USE_SX_LOCK
-  dsm_client_->CasMask(cas_addr, log_cas_size, equal, swap, cas_buffer, mask,
-                       false);
+  dsm_client_->Cas(cas_addr, equal, swap, cas_buffer, false);
   release_sx_lock(lock_addr, lock_buffer, ctx, async, share_lock);
 #else  // not USE_SX_LOCK
 
@@ -480,7 +495,11 @@ void Tree::lock_and_read(GlobalAddress lock_addr, bool share_lock,
   } else {
     add_val = upgrade_from_s ? (ADD_X_LOCK | ADD_S_UNLOCK) : ADD_X_LOCK;
   }
-  dsm_client_->FaaDmBound(lock_addr, 3, add_val, lock_buffer, XS_LOCK_FAA_MASK,
+  /*
+   * @author zyu 2024-12-11 11:01:11
+   * @description update FAADmBound to FaaDm
+  */
+  dsm_client_->FaaDm(lock_addr, add_val, lock_buffer, 
                           false);
   dsm_client_->ReadSync(read_buffer, read_addr, read_size, ctx);
 
@@ -1533,9 +1552,10 @@ void Tree::internal_page_store_update_left_child(GlobalAddress page_addr,
       uint64_t *cas_ret_buffer = rbuf.get_cas_buffer();
       // lock-based, must cas succeed
 #if KEY_SIZE == 8
-      dsm_client_->CasMask(GADD(page_addr, ((char *)insert_addr - page_buffer)),
-                           4, (uint64_t)old_buffer, (uint64_t)insert_addr,
-                           cas_ret_buffer, (uint64_t)mask_buffer, false);
+      // update CasMask to Cas
+      dsm_client_->Cas(GADD(page_addr, ((char *)insert_addr - page_buffer)),
+                           (uint64_t)old_buffer, (uint64_t)insert_addr,
+                           cas_ret_buffer,false);
 #else
       dsm_client_->Write(
           (char *)&insert_addr->key,
@@ -1555,9 +1575,13 @@ void Tree::internal_page_store_update_left_child(GlobalAddress page_addr,
     memcpy(old_buffer, insert_addr, sizeof(InternalEntry));
     insert_addr->key = k;
     insert_addr->ptr = v;
-    dsm_client_->CasMask(GADD(page_addr, ((char *)insert_addr - page_buffer)),
-                         4, (uint64_t)old_buffer, (uint64_t)insert_addr,
-                         cas_ret_buffer, (uint64_t)mask_buffer, false);
+    /*
+     * @author zyu 2024-12-11 10:52:08
+     * @description update CasMask to Cas
+    */
+    dsm_client_->Cas(GADD(page_addr, ((char *)insert_addr - page_buffer)),
+                          (uint64_t)old_buffer, (uint64_t)insert_addr,
+                         cas_ret_buffer, false);
 #else
     insert_addr->key = k;
     insert_addr->ptr = GlobalAddress::Null();
@@ -1747,10 +1771,14 @@ retry_insert:
     swap_entry->lv.val = v;
     uint64_t *mask_buffer = rbuf.get_cas_buffer();
     mask_buffer[0] = mask_buffer[1] = ~0ull;
-    bool cas_ok = dsm_client_->CasMaskSync(
-        GADD(page_addr, ((char *)insert_addr - page_buffer)), 4,
+    /*
+     * @author zyu 2024-12-11 10:52:36
+     * @description update CasMaskSync to CasSync
+    */
+    bool cas_ok = dsm_client_->CasSync(
+        GADD(page_addr, ((char *)insert_addr - page_buffer)),
         (uint64_t)insert_addr, (uint64_t)swap_buffer, cas_ret_buffer,
-        (uint64_t)mask_buffer, ctx);
+        ctx);
     // cas succeed or same key inserted by other thread
     if (cas_ok || (__bswap_64(cas_ret_buffer[0]) == k)) {
       release_lock(lock_addr, lock_buffer, ctx, true, share_lock);
@@ -1866,10 +1894,14 @@ retry_insert_2:
     swap_entry->lv.val = v;
     uint64_t *mask_buffer = rbuf.get_cas_buffer();
     mask_buffer[0] = mask_buffer[1] = ~0ull;
-    bool cas_ok = dsm_client_->CasMaskSync(
-        GADD(page_addr, ((char *)insert_addr - page_buffer)), 4,
+    /*
+     * @author zyu 2024-12-11 10:53:11
+     * @description update CasMaskSync to CasSync
+    */
+    bool cas_ok = dsm_client_->CasSync(
+        GADD(page_addr, ((char *)insert_addr - page_buffer)), 
         (uint64_t)insert_addr, (uint64_t)swap_buffer, cas_ret_buffer,
-        (uint64_t)mask_buffer, ctx);
+        ctx);
     // cas succeed or same key inserted by other thread
     if (cas_ok || (__bswap_64(cas_ret_buffer[0]) == k)) {
       release_lock(lock_addr, lock_buffer, ctx, true, share_lock);

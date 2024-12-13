@@ -2,14 +2,15 @@
 
 addr=$(head -1 ../memcached.conf)
 port=$(awk 'NR==2{print}' ../memcached.conf)
-
+private_key=$(awk 'NR==3{print}' ../memcached.conf)
+sshport=$(awk 'NR==4{print}' ../memcached.conf)
 # kill old me
-sudo ssh ${addr} "cat /tmp/memcached.pid | xargs kill"
+ssh -i $private_key ${addr}  -p ${sshport} "cat /tmp/memcached.pid | xargs kill"
 
 sudo sh -c "echo 3 > /proc/sys/vm/drop_caches"
 
 # launch memcached
-sudo ssh ${addr} "memcached -u root -l ${addr} -p  ${port} -c 10000 -d -P /tmp/memcached.pid"
+ssh -i $private_key ${addr}  -p ${sshport}  "memcached -u root -l ${addr} -p  ${port} -c 10000 -d -P /tmp/memcached.pid"
 sleep 1
 
 # init 

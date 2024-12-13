@@ -30,8 +30,7 @@ def exec_command(command):
 
 subprocess.run(f'make -j', shell=True)
 
-num_servers = 2
-num_clients = 10
+
 
 threads_CN_arr = [30]
 key_space_arr = [400e6]
@@ -43,9 +42,9 @@ zipf_arr = [0.99]
 # read_ratio_arr = [80, 60, 40, 20, 0]
 # zipf_arr = [0.6, 0.7, 0.8, 0.9]
 
-print(threads_CN_arr)
+print("CN thread ",threads_CN_arr)
 print(key_space_arr)
-print(read_ratio_arr)
+print("", read_ratio_arr)
 print(zipf_arr)
 
 file_name = get_res_name("bench")
@@ -55,10 +54,11 @@ with open('../script/global_config.yaml', 'r') as f:
 
 exe_path = f'{g_cfg["src_path"]}/{g_cfg["app_rel_path"]}'
 username = g_cfg['username']
-password = g_cfg['password']
-
+# password = g_cfg['password']
+private_key = g_cfg['private_key']
 print(exe_path)
-
+num_servers = g_cfg['num_servers']
+num_clients = g_cfg['num_clients']
 
 with open(file_name, 'w') as fp:
     product_list = list(product(key_space_arr, read_ratio_arr, zipf_arr, threads_CN_arr))
@@ -82,7 +82,7 @@ with open(file_name, 'w') as fp:
             print(f'issue server {i} {ip} {numa_id}')
             cmd = f'cd {exe_path} && sudo sh -c "echo 3 > /proc/sys/vm/drop_caches" && numactl --membind={numa_id} --cpunodebind={numa_id} ./{g_cfg["server_app"]} --server_count {num_servers} --client_count {num_clients} --numa_id {numa_id} &> ../log/server_{i}.log'
 
-            ssh, stdin, stdout, stderr = ssh_command(ip, username, password, cmd)
+            ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
             server_sshs.append(ssh)
             server_stdouts.append(stdout)
             time.sleep(1)
@@ -97,7 +97,7 @@ with open(file_name, 'w') as fp:
             numa_id = g_cfg['clients'][i]['numa_id']
             print(f'issue client {i} {ip} {numa_id}')
             cmd = f'cd {exe_path} && numactl --membind={numa_id} --cpunodebind={numa_id} ./{g_cfg["client_app"]} --server_count {num_servers} --client_count {num_clients} --numa_id {numa_id} --num_prefill_threads {num_prefill_threads} --num_bench_threads {num_threads} --key_space {key_space} --read_ratio {read_ratio} --zipf {zipf} &> ../log/client_{i}.log'
-            ssh, stdin, stdout, stderr = ssh_command(ip, username, password, cmd)
+            ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
             client_sshs.append(ssh)
             client_stdouts.append(stdout)
             if i == 0:
