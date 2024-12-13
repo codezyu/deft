@@ -79,9 +79,9 @@ with open(file_name, 'w') as fp:
         for i in range(num_servers):
             ip = g_cfg['servers'][i]['ip']
             numa_id = g_cfg['servers'][i]['numa_id']
-            print(f'issue server {i} {ip} {numa_id}')
+            print(f'issue server {i} {ip} numa{numa_id}')
             cmd = f'cd {exe_path} && sudo sh -c "echo 3 > /proc/sys/vm/drop_caches" && numactl --membind={numa_id} --cpunodebind={numa_id} ./{g_cfg["server_app"]} --server_count {num_servers} --client_count {num_clients} --numa_id {numa_id} &> ../log/server_{i}.log'
-
+            print(cmd)
             ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
             server_sshs.append(ssh)
             server_stdouts.append(stdout)
@@ -95,7 +95,7 @@ with open(file_name, 'w') as fp:
         for i in range(num_clients):
             ip = g_cfg['clients'][i]['ip']
             numa_id = g_cfg['clients'][i]['numa_id']
-            print(f'issue client {i} {ip} {numa_id}')
+            print(f'issue client {i} {ip} numa{numa_id}')
             cmd = f'cd {exe_path} && numactl --membind={numa_id} --cpunodebind={numa_id} ./{g_cfg["client_app"]} --server_count {num_servers} --client_count {num_clients} --numa_id {numa_id} --num_prefill_threads {num_prefill_threads} --num_bench_threads {num_threads} --key_space {key_space} --read_ratio {read_ratio} --zipf {zipf} &> ../log/client_{i}.log'
             ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
             client_sshs.append(ssh)
@@ -108,7 +108,7 @@ with open(file_name, 'w') as fp:
         finish = False
         has_error = False
         while not finish and not has_error:
-            time.sleep(1)
+            time.sleep(3)
             finish = True
             for i in range(num_servers):
                 if server_stdouts[i].channel.exit_status_ready():

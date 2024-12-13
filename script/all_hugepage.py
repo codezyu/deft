@@ -17,7 +17,7 @@ def all_hugepage():
             continue
         ip_set.add(ip)
         print(f'hugepage ${ip}')
-        cmd = f'sudo sysctl -w vm.nr_hugepages=65536'
+        cmd = f'sudo sysctl -w vm.nr_hugepages=32768'
         ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
         ssh.close()
 
