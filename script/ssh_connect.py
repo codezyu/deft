@@ -12,8 +12,10 @@ def ssh_command(ip, username, password=None, key_file=None, cmd=None):
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     if key_file:
         private_key = paramiko.RSAKey.from_private_key_file(key_file)
-        ssh.connect(ip, username=username, pkey=private_key)
+        ssh.connect(ip, username=username, password=password, pkey=private_key)
     else:       
         ssh.connect(ip, username=username, password=password)
-    stdin, stdout, stderr = ssh.exec_command(cmd)
+    # change mode to root
+    sudo_cmd = f"echo {password} | sudo -S su -c '{cmd}'"
+    stdin, stdout, stderr = ssh.exec_command(sudo_cmd)
     return ssh, stdin, stdout, stderr

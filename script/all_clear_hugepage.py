@@ -18,7 +18,7 @@ def all_clear_hugepage():
         ip_set.add(ip)
         print(f'clear_hugepage ${ip}')
         cmd = f'sudo sysctl -w vm.nr_hugepages=0'
-        ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
+        ssh, stdin, stdout, stderr = ssh_command(ip, username, password, private_key, cmd)
         ssh.close()
 
 if __name__ == '__main__':

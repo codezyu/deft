@@ -9,7 +9,7 @@ with open('../script/global_config.yaml', 'r') as f:
 def killall():
     ip_set = set()
     username=g_cfg['username']
-    # password=g_cfg['password']
+    password=g_cfg['password']
     private_key=g_cfg['private_key']
     for i in range(len(g_cfg['clients'])):
         ip = g_cfg['clients'][i]['ip']
@@ -19,7 +19,7 @@ def killall():
         print(f'killall {ip}')
 
         cmd = f'killall -9 {g_cfg["client_app"]} > /dev/null; killall -9 {g_cfg["server_app"]} > /dev/null'
-        ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
+        ssh, stdin, stdout, stderr = ssh_command(ip, username, password, private_key, cmd)
         ssh.close()
 
 if __name__ == '__main__':

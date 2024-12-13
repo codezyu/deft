@@ -9,7 +9,7 @@ with open('../script/global_config.yaml', 'r') as f:
 def all_hugepage():
     ip_set = set()
     username=g_cfg['username']
-    # password=g_cfg['password']
+    password=g_cfg['password']
     private_key=g_cfg['private_key']
     for i in range(len(g_cfg['clients'])):
         ip = g_cfg['clients'][i]['ip']
@@ -18,7 +18,7 @@ def all_hugepage():
         ip_set.add(ip)
         print(f'hugepage ${ip}')
         cmd = f'sudo sysctl -w vm.nr_hugepages=32768'
-        ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
+        ssh, stdin, stdout, stderr = ssh_command(ip, username, password, private_key, cmd)
         ssh.close()
 
 if __name__ == '__main__':

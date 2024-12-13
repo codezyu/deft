@@ -54,7 +54,7 @@ with open('../script/global_config.yaml', 'r') as f:
 
 exe_path = f'{g_cfg["src_path"]}/{g_cfg["app_rel_path"]}'
 username = g_cfg['username']
-# password = g_cfg['password']
+password = g_cfg['password']
 private_key = g_cfg['private_key']
 print(exe_path)
 num_servers = g_cfg['num_servers']
@@ -76,15 +76,17 @@ with open(file_name, 'w') as fp:
 
         server_sshs = []
         server_stdouts = []
+        server_stderrs = []
         for i in range(num_servers):
             ip = g_cfg['servers'][i]['ip']
             numa_id = g_cfg['servers'][i]['numa_id']
             print(f'issue server {i} {ip} numa{numa_id}')
             cmd = f'cd {exe_path} && sudo sh -c "echo 3 > /proc/sys/vm/drop_caches" && numactl --membind={numa_id} --cpunodebind={numa_id} ./{g_cfg["server_app"]} --server_count {num_servers} --client_count {num_clients} --numa_id {numa_id} &> ../log/server_{i}.log'
             print(cmd)
-            ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
+            ssh, stdin, stdout, stderr = ssh_command(ip, username, password, private_key, cmd)
             server_sshs.append(ssh)
             server_stdouts.append(stdout)
+            server_stderrs.append(stderr)
             time.sleep(1)
 
         time.sleep(1)
@@ -97,7 +99,7 @@ with open(file_name, 'w') as fp:
             numa_id = g_cfg['clients'][i]['numa_id']
             print(f'issue client {i} {ip} numa{numa_id}')
             cmd = f'cd {exe_path} && numactl --membind={numa_id} --cpunodebind={numa_id} ./{g_cfg["client_app"]} --server_count {num_servers} --client_count {num_clients} --numa_id {numa_id} --num_prefill_threads {num_prefill_threads} --num_bench_threads {num_threads} --key_space {key_space} --read_ratio {read_ratio} --zipf {zipf} &> ../log/client_{i}.log'
-            ssh, stdin, stdout, stderr = ssh_command(ip, username, None, private_key, cmd)
+            ssh, stdin, stdout, stderr = ssh_command(ip, username, password, private_key, cmd)
             client_sshs.append(ssh)
             client_stdouts.append(stdout)
             if i == 0:
@@ -108,13 +110,13 @@ with open(file_name, 'w') as fp:
         finish = False
         has_error = False
         while not finish and not has_error:
-            time.sleep(3)
+            time.sleep(1)
             finish = True
             for i in range(num_servers):
                 if server_stdouts[i].channel.exit_status_ready():
                     if server_stdouts[i].channel.recv_exit_status() != 0:
                         has_error = True
-                        print(f'server {i} error')
+                        print(f'server {i} error: {server_stderrs[i].read().decode("utf-8")}')
                         break
                 else:
                     finish = False
